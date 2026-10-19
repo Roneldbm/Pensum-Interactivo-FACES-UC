@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Planificador Curricular 1S-2027 - FACES UC</title>
+    <style>
+        :root {
+            --bg: #121212;
+            --panel: #1e1e1e;
+            --text: #e0e0e0;
+            --approved: #2e7d32;
+            --available: #1976d2;
+            --locked: #333333;
+            --border: #444;
+            --accent: #64b5f6;
+            --danger: #ff5252;
+            --warning: #ff9800;
+        }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        h1, h2 { text-align: center; margin: 5px 0; }
+        h2 { color: #888; margin-bottom: 20px; font-size: 1.1rem; }
+        
+        .controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        select { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 10px; font-size: 1rem; border-radius: 5px; cursor: pointer; outline: none; }
+        button.clear-btn { background: var(--danger); color: white; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background 0.3s; }
+        button.clear-btn:hover { background: #ff1744; }
+
+        .dashboard { display: flex; justify-content: space-between; background: var(--panel); padding: 15px; border-radius: 8px; border: 1px solid var(--border); margin: 20px 0; flex-wrap: wrap; gap: 15px; align-items: center; }
+        .stats span { color: #4caf50; font-weight: bold; font-size: 1.3rem; }
+        .legend { display: flex; gap: 15px; align-items: center; flex-wrap: wrap; }
+        .box { width: 15px; height: 15px; border-radius: 3px; }
+
+        .grid { display: flex; flex-direction: column; gap: 12px; }
+        
+        /* Estructura de 3 columnas para cada fila */
+        .semester-row { display: flex; gap: 15px; align-items: stretch; background: var(--panel); padding: 10px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+        
+        /* Columna Izquierda: Botón Semestre */
+        .sem-header { flex: 0 0 110px; display: flex; align-items: center; justify-content: center; background: #2c2c2c; font-weight: bold; font-size: 1.1rem; border-radius: 6px; border: 1px solid var(--border); text-align: center; padding: 10px; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; user-select: none; }
+        .sem-header:hover { background: #3d3d3d; box-shadow: 0 0 8px rgba(255,255,255,0.1); border-color: #666; }
+        .sem-header:active { transform: scale(0.98); }
+        
+        /* Columna Central: Materias */
+        .subjects-container { display: flex; gap: 10px; flex-wrap: wrap; flex: 1 1 50%; }
+        
+        /* Columna Derecha: Unidades Crédito */
+        .uc-summary { flex: 0 0 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #2c2c2c; border-radius: 6px; border: 1px solid var(--border); font-weight: bold; font-size: 1.2rem; text-align: center; padding: 10px; transition: 0.3s; }
+        .uc-summary-title { font-size: 0.65rem; color: #aaa; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1.1; }
+        
+        /* Alerta de salto de semestre */
+        .uc-summary.jump-warning { background: var(--warning); color: #121212; border-color: #e65100; box-shadow: 0 0 10px rgba(255, 152, 0, 0.4); }
+        .uc-summary.jump-warning .uc-summary-title { color: #333; }
+        
+        .subject { flex: 1 1 160px; background: var(--locked); border: 1px solid var(--border); border-radius: 6px; padding: 10px; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; justify-content: space-between; min-height: 85px; user-select: none; position: relative; }
+        .subject:hover { transform: translateY(-3px); border-color: #888; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+        .subject.approved { background: var(--approved); border-color: #4caf50; }
+        .subject.available { background: var(--available); border-color: var(--accent); box-shadow: 0 0 10px rgba(25,118,210,0.6); }
+        .sub-name { font-size: 0.8rem; font-weight: 600; text-align: center; margin-bottom: 5px; line-height: 1.2; }
+        .sub-foot { display: flex; justify-content: space-between; font-size: 0.7rem; color: #aaa; margin-top: auto; }
+        .approved .sub-foot, .available .sub-foot { color: #eee; }
+        .req-badge { position: absolute; top: -8px; right: -8px; background: #ff9800; color: #000; font-size: 0.65rem; font-weight: bold; padding: 3px 6px; border-radius: 4px; display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+        
+        .alerts { margin-top: 20px; padding: 15px; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+        .alerts h3 { margin-top: 0; color: var(--accent); }
+        .error { color: var(--danger); font-weight: bold; }
+        .info { color: #bbb; font-size: 0.95rem; line-height: 1.5; }
+
+        @media (max-width: 900px) {
+            .sem-header, .uc-summary { flex: 1 1 100%; min-height: 40px; flex-direction: row; gap: 10px; }
+            .uc-summary-title { margin-bottom: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Planificador Interactivo FACES UC (1S-2027)</h1>
+    <h2>Bárbula / La Morita</h2>
+
+    <div class="controls">
+        <select id="school-select" onchange="loadSchool()">
+            <option value="contaduria">Contaduría Pública (ACCP)</option>
+            <option value="administracion">Administración Comercial (ACCP)</option>
+            <option value="economia">Economía (ECON)</option>
+            <option value="ri">Relaciones Industriales (RI)</option>
+        </select>
+        <button class="clear-btn" onclick="clearAll()">⟲ Limpiar Selección</button>
+    </div>
+
+    <!-- Dashboard Superior -->
+    <div class="dashboard">
+        <div class="stats">
+            UCs Aprobadas: <span class="uc-count-display">0</span> | 
+            Materias Aprobadas: <span class="mat-count-display">0</span>
+        </div>
+        <div class="legend">
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--approved)"></div> Aprobada</div>
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--available)"></div> Disponible Prox. Semestre</div>
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--locked)"></div> Bloqueada</div>
+        </div>
+    </div>
+
+    <div class="grid" id="grid"></div>
+
+    <!-- Dashboard Inferior -->
+    <div class="dashboard">
+        <div class="stats">
+            UCs Aprobadas: <span class="uc-count-display">0</span> | 
+            Materias Aprobadas: <span class="mat-count-display">0</span>
+        </div>
+        <div class="legend">
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--approved)"></div> Aprobada</div>
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--available)"></div> Disponible Prox. Semestre</div>
+            <div style="display:flex; gap:5px;"><div class="box" style="background:var(--locked)"></div> Bloqueada</div>
+        </div>
+    </div>
+
+    <div class="alerts" id="alerts"></div>
+
+    <script>
+        const db = {
+            'contaduria': {
+                rule: 'Límite: Máximo 17 UCs regulares por semestre. Rango máximo permitido de 3 niveles consecutivos desde la materia pendiente más baja.',
+                data: [
+                    ['CB-1102','Intro a la Economía',1,3,[],0], ['CB-1101','Hist Contemporánea',1,3,[],0], ['CB-1104','Métodos Invest I',1,3,[],0], ['CB-1103','Intro Matemática',1,4,[],0], ['AC-2201','Derecho Público',1,2,[],0],
+                    ['AC-2101','Fund Económicos I',2,3,['CB-1102'],0], ['AC-4101','Contabilidad I',2,4,[],12], ['AC-2503','Soc Organizaciones',2,3,['CB-1104'],0], ['CB-2102','Matemática I',2,4,['CB-1103'],0], ['AC-2203','Leg Mercantil',2,3,['AC-2201'],0],
+                    ['AC-2102','Fund Económicos II',3,3,['AC-2101'],0], ['AC-4102','Contabilidad II',3,4,['AC-4101'],0], ['AC-5032','Teoría Organización',3,3,['AC-2503'],0], ['AC-1101','Matemática II',3,3,['CB-2102'],0], ['AC-2207','Leg Laboral',3,2,['AC-2203'],0],
+                    ['AC-2301','Rec Económicos I',4,2,['AC-2102'],0], ['AC-4103','Contabilidad III',4,4,['AC-4102'],0], ['AC-5107','Comp Organizacional',4,3,['AC-5032'],0], ['AC-1204','Estadística I',4,3,['AC-1101'],0], ['AC-1102','Cálculo Financiero',4,3,['AC-1101'],0],
+                    ['AC-2302','Rec Económicos II',5,2,['AC-2301'],0], ['CP-4104','Contabilidad IV',5,4,['AC-4103'],0], ['CB-2101','Métodos Invest II',5,2,['CB-1104'],0], ['AC-1205','Estadística II',5,3,['AC-1204'],0], ['AC-5503','Admin Pública',5,3,['AC-2201'],0],
+                    ['CP-4207','Cont Época Inflación',6,3,['CP-4104'],0], ['CP-4201','Cont Gubernamental',6,2,['CP-4104'],0], ['CP-4301','Costos I',6,3,['CP-4104'],0], ['AC-1206','Estadística III',6,3,['AC-1205'],0], ['AC-3502','Princ Computación',6,2,['CB-2102'],0],
+                    ['AC-2303','Instit Financieras',7,2,['AC-2302'],0], ['CP-3101','Auditoría I',7,3,['CP-4104'],0], ['CP-4303','Costos II',7,3,['CP-4301'],0], ['CP-3302','Sist y Procedimientos',7,3,[],76], ['AC-2208','Der Financiero',7,2,['AC-2203'],0],
+                    ['AC-2501','Prob Socioeconómicos',8,3,['AC-2303'],0], ['CP-3103','Auditoría II',8,4,['CP-3101'],0], ['CP-4304','Costos III',8,3,['CP-4303'],0], ['CP-3303','Sist Contabilidad',8,3,['CP-3302'],0], ['AC-5206','Impuestos I',8,3,['AC-2208'],0],
+                    ['AC-2402','Invest Aplicada',9,3,['CB-2101'],0], ['CP-3104','Auditoría III',9,4,['CP-3103'],0], ['CP-3401','Análisis Estados Fin',9,3,['CP-4207'],0], ['AC-5302','Presupuesto Emp',9,3,['CP-3303'],0], ['AC-5207','Impuestos II',9,3,['AC-5206'],0],
+                    ['ELEC-1','Electiva',10,2,[],76], ['ELEC-2','Electiva',10,2,[],76], ['CP-3102','Problemática Cont',10,2,[],118], ['CP-2403','Trabajo de Grado',10,0,[],118]
+                ]
+            },
+            'administracion': {
+                rule: 'Límite: Máximo 17 UCs regulares por semestre. Rango máximo permitido de 3 niveles consecutivos desde la materia pendiente más baja.',
+                data: [
+                    ['CB-1102','Intro a la Economía',1,3,[],0], ['CB-1101','Hist Contemporánea',1,3,[],0], ['CB-1103','Intro Matemática',1,4,[],0], ['CB-1104','Métodos Invest I',1,3,[],0], ['AC-2201','Derecho Público',1,2,[],0],
+                    ['AC-2101','Fund Económicos I',2,3,['CB-1102'],0], ['AC-4101','Contabilidad I',2,4,[],12], ['CB-2102','Matemática I',2,4,['CB-1103'],0], ['AC-2503','Soc Organizaciones',2,3,['CB-1104'],0], ['AC-2203','Leg Mercantil',2,3,['AC-2201'],0],
+                    ['AC-2102','Fund Económicos II',3,3,['AC-2101'],0], ['AC-4102','Contabilidad II',3,4,['AC-4101'],0], ['AC-1101','Matemática II',3,3,['CB-2102'],0], ['AC-5032','Teoría Organización',3,3,['AC-2503'],0], ['AC-2207','Leg Laboral',3,2,['AC-2203'],0],
+                    ['AC-2301','Rec Económicos I',4,2,['AC-2102'],0], ['AC-4103','Contabilidad III',4,4,['AC-4102'],0], ['AC-1204','Estadística I',4,3,['AC-1101'],0], ['AC-5107','Comp Organizacional',4,3,['AC-5032'],0], ['AC-1102','Cálculo Financiero',4,3,['AC-1101'],0],
+                    ['AC-2302','Rec Económicos II',5,2,['AC-2301'],0], ['AD-4303','Cont de Costos',5,4,['AC-4103'],0], ['AC-1205','Estadística II',5,3,['AC-1204'],0], ['AD-5407','Admin Rec Humanos',5,3,[],0], ['AC-5503','Admin Pública',5,3,['AC-2201'],0],
+                    ['ELEC-1','Electiva',6,2,[],76], ['CB-2101','Métodos Invest II',6,2,['CB-1104'],0], ['AC-1206','Estadística III',6,3,['AC-1205'],0], ['AD-5108','Desarrollo Org',6,3,['AD-5407'],0], ['AC-3502','Princ Computación',6,2,['CB-2102'],0],
+                    ['AC-2208','Der Financiero',7,2,['AC-2203'],0], ['AD-4202','Finanzas I',7,4,['AD-4303'],0], ['AD-5403','Técnicas Cuantitativas',7,3,['AC-1205'],0], ['AC-2303','Instit Financieras',7,2,['AC-2302'],0], ['AD-5306','Mercado I',7,3,['AC-2102'],0],
+                    ['AC-5206','Impuestos I',8,3,['AC-2208'],0], ['AD-5301','Finanzas II',8,3,['AD-4202'],0], ['AD-5402','Admin Operaciones',8,3,['AD-5403'],0], ['AC-2501','Prob Socioeconómicos',8,3,['AC-2303'],0], ['AD-5307','Mercado II',8,3,['AD-5306'],0],
+                    ['AC-5207','Impuestos II',9,3,['AC-5206'],0], ['AC-5302','Presupuesto Emp',9,3,['AD-5301'],0], ['AD-5304','Auditoría Admin',9,3,['AD-5108'],0], ['AC-2402','Invest Aplicada',9,3,['CB-2101'],0], ['AD-3302','Sist Información',9,3,['AC-3502'],0],
+                    ['ELEC-2','Electiva',10,2,[],76], ['AD-5404','Form Eval Proyectos',10,3,['AD-5301'],0], ['AD-5103','Problemática Admin',10,2,[],118], ['AD-2403','Trabajo de Grado',10,0,[],118]
+                ]
+            },
+            'economia': {
+                rule: 'Límite: Máximo 18 UCs (19 UCs si inscribe Macro I o II). Requisitos Especiales. Rango máximo 3 niveles.',
+                data: [
+                    ['CB-1101','Hist Contemporánea',1,3,[],0], ['CB-1102','Intro a la Economía',1,3,[],0], ['CB-1103','Intro Matemática',1,4,[],0], ['CB-1104','Métodos Invest I',1,3,[],0],
+                    ['EC-4803','Formación Integral',2,2,['CB-1101'],0], ['EC-3081','Microeconomía I',2,4,['CB-1102','CB-1103'],0], ['CB-2102','Matemática I',2,4,['CB-1103'],0], ['EC-8241','Princ Computación',2,3,['CB-1103'],0],
+                    ['EC-5092','Hist Sist Económicos',3,3,['CB-1101'],0], ['EC-4082','Microeconomía II',3,4,['EC-3081'],0], ['EC-3141','Matemática II',3,4,['CB-2102'],0], ['EC-4083','Estadística Descriptiva',3,4,['CB-2102'],0], ['EC-2086','Intro Contabilidad',3,3,['CB-1103'],0],
+                    ['EC-5089','Microeconomía III',4,4,['EC-4082'],0], ['EC-5090','Macroeconomía I',4,4,['EC-4082'],0], ['EC-4141','Matemática III',4,4,['EC-3141'],0], ['EC-4084','Teoría Probabilidad',4,4,['EC-3141'],0], ['EC-2087','Cont Financiera',4,3,['EC-2086'],0],
+                    ['EC-9297','Microeconomía IV',5,3,['EC-5089'],0], ['EC-6091','Macroeconomía II',5,4,['EC-5090'],0], ['EC-2144','Derecho Económico',5,3,['EC-5092'],0], ['EC-5085','Estadística Aplicada',5,4,['EC-4141'],0], ['EC-4588','Fund Cont Costos',5,4,['EC-2087'],0],
+                    ['EC-9234','Economía Industrial',6,3,['EC-5089'],0], ['EC-7111','Macroeconomía III',6,4,['EC-4141'],0], ['EC-3151','Rec Económicos',6,3,['EC-6091'],0], ['EC-8123','Econometría',6,4,['EC-5090'],0], ['EC-6095','Finanzas I',6,3,['EC-2087'],0],
+                    ['EC-6094','Pens/Doctrinas Econ',7,3,['EC-5092'],0], ['EC-7121','Teoría/Pol Fiscal',7,3,['EC-6091'],0], ['EC-7122','Teoría/Pol Monetaria',7,3,['EC-6091'],0], ['EC-9103','Metodología Invest',7,3,['EC-5085'],0], ['EC-7096','Finanzas II',7,3,['EC-6095'],0],
+                    ['EC-5093','Gerencia',8,3,['EC-3151'],0], ['EC-8121','Economía Int I',8,3,['EC-7111'],0], ['EC-7131','Mercados I',8,3,['EC-7111'],0], ['EC-6141','Invest Operaciones',8,3,['EC-5085'],0], ['EC-9231','Finanzas III',8,3,['EC-7096'],0],
+                    ['EC-9101','Teoría/Met Planif',9,3,['EC-5093'],0], ['EC-8122','Desarrollo Econ I',9,3,['EC-8121'],0], ['EC-9131','Proyectos Económicos',9,3,['EC-7131','EC-8123'],0], ['ELEC-1','Electiva',9,3,[],0], ['ELEC-2','Electiva',9,3,[],0],
+                    ['ELEC-3','Electiva',10,3,[],0], ['ELEC-4','Electiva',10,3,[],0], ['ELEC-5','Electiva',10,3,[],0], ['ELEC-6','Electiva',10,3,[],0], ['EC-9902','Trabajo de Grado',10,0,['EC-9297','EC-7111'],0]
+                ]
+            },
+            'ri': {
+                rule: 'Límite: Carga normal de 4 asignaturas. Se permite 5ta materia solo en caso de Electiva, Seminario o Proyecto. Rango máximo 3 niveles.',
+                data: [
+                    ['CB-1104','Métodos Invest I',1,3,[],0], ['CB-1101','Hist Contemporánea',1,3,[],0], ['CB-1102','Intro a la Economía',1,3,[],0], ['CB-1103','Intro Matemática',1,4,[],0],
+                    ['CB-2101','Métodos Invest II',2,3,['CB-1104'],0], ['RI-2210','Intro Rel Industriales',2,3,['CB-1101','CB-1104'],0], ['RI-0414','Antropología',2,3,['CB-1101'],0], ['RI-2200','Economía Social',2,3,['CB-1102'],0], ['CB-2102','Matemática I',2,4,['CB-1103'],0],
+                    ['RI-0432','Soc del Trabajo',3,3,['RI-2210'],0], ['RI-0641','Psicología General',3,3,['CB-1104'],0], ['RI-0642','Legislación Económica',3,3,['CB-1102'],0], ['RI-0924','Contabilidad General',3,3,['CB-1103'],0], ['RI-0315','Economía Laboral',3,3,['RI-2200'],0],
+                    ['RI-0542','Fisiología/Ergonomía',4,3,['RI-0432'],0], ['RI-0741','Psicología Social',4,3,['RI-0641'],0], ['RI-0443','Estadística I',4,4,['CB-2102'],0], ['RI-0645','Computación',4,2,['CB-2102'],0],
+                    ['RI-0622','Higiene Ocupacional',5,3,['RI-0542'],0], ['RI-0867','Dinámica de Grupo',5,3,['RI-0741'],0], ['RI-0522','Seguridad Social',5,3,['RI-0642'],0], ['RI-0532','Derecho del Trabajo',5,3,['RI-0642'],0],
+                    ['RI-0716','Seguridad Industrial',6,3,['RI-0622'],0], ['RI-0759','Teoría Organización',6,3,['RI-0432'],0], ['RI-0758','Selección Personal',6,3,['RI-0867'],0], ['RI-0733','Relaciones de Trabajo',6,3,['RI-0532'],0],
+                    ['RI-0912','Sueldos y Salarios I',7,3,['RI-0716'],0], ['RI-1038','Org Dir Empresas I',7,3,['RI-0759'],0], ['RI-0536','Planif Des RRHH I',7,3,['RI-0758'],0], ['RI-0623','Negociación Colectiva',7,3,['RI-0733'],0], ['ELEC-1','Electiva',7,3,[],81],
+                    ['RI-1046','Sueldos y Salarios II',8,3,['RI-0912'],0], ['RI-0937','Org Dir Empresas II',8,3,['RI-1038'],0], ['RI-0974','Planif Des RRHH II',8,2,['RI-0536'],0], ['SEM-1','Seminario I',8,2,[],96],
+                    ['RI-0835','Auditoría de RI',9,3,['RI-1046'],0], ['RI-1000','Proyecto Invest',9,2,['RI-0443'],105], ['SEM-2','Seminario II',9,2,[],107],
+                    ['RI-0975','Políticas y Normas RI',10,3,['RI-0835'],110], ['RI-1012','Dirección de Emp',10,3,['RI-1046'],0], ['RI-1045','Relaciones de Trab',10,3,['RI-0974'],0], ['TG-1','Trabajo de Grado',10,0,['RI-1000'],0]
+                ]
+            }
+        };
+
+        let approved = new Set();
+        let currentSch = 'contaduria';
+        let parsedSubjects = [];
+
+        function loadSchool() {
+            currentSch = document.getElementById('school-select').value;
+            approved.clear();
+            
+            parsedSubjects = db[currentSch].data.map(item => ({
+                id: item[0], name: item[1], s: item[2], uc: item[3], reqs: item[4], minUC: item[5]
+            }));
+            
+            renderGrid();
+        }
+
+        function clearAll() {
+            approved.clear();
+            updateLogic();
+        }
+
+        function toggle(id) {
+            if (approved.has(id)) approved.delete(id);
+            else approved.add(id);
+            updateLogic();
+        }
+
+        function toggleSemester(sem) {
+            const subsInSem = parsedSubjects.filter(sub => sub.s === sem);
+            const allApproved = subsInSem.every(sub => approved.has(sub.id));
+            
+            if (allApproved) {
+                subsInSem.forEach(sub => approved.delete(sub.id));
+            } else {
+                subsInSem.forEach(sub => approved.add(sub.id));
+            }
+            updateLogic();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            
+            for (let i = 1; i <= 10; i++) {
+                const subs = parsedSubjects.filter(sub => sub.s === i);
+                if(subs.length === 0) continue;
+
+                const row = document.createElement('div');
+                row.className = 'semester-row';
+                
+                // Columna 1: Botón de Semestre
+                const header = document.createElement('div');
+                header.className = 'sem-header';
+                header.innerText = `Semestre ${i}`;
+                header.title = "Haz clic para seleccionar o desmarcar todas las materias de este semestre";
+                header.onclick = () => toggleSemester(i);
+                
+                row.appendChild(header);
+
+                // Columna 2: Materias
+                const subsContainer = document.createElement('div');
+                subsContainer.className = 'subjects-container';
+
+                subs.forEach(sub => {
+                    const el = document.createElement('div');
+                    el.className = 'subject locked';
+                    el.id = sub.id;
+                    el.onclick = () => toggle(sub.id);
+                    
+                    let reqBadge = '';
+                    if (sub.minUC > 0) reqBadge = `<span class="req-badge">${sub.minUC} UC</span>`;
+
+                    el.innerHTML = `
+                        ${reqBadge}
+                        <div class="sub-name">${sub.name}</div>
+                        <div class="sub-foot"><span>${sub.id}</span><span>${sub.uc} UC</span></div>
+                    `;
+                    subsContainer.appendChild(el);
+                });
+
+                row.appendChild(subsContainer);
+                
+                // Columna 3: Unidades de Crédito
+                const ucSummary = document.createElement('div');
+                ucSummary.className = 'uc-summary';
+                ucSummary.id = `uc-summary-${i}`;
+                ucSummary.innerHTML = `
+                    <div class="uc-summary-title">Unidades Crédito</div>
+                    <div class="uc-summary-vals">0 | 0</div>
+                `;
+                row.appendChild(ucSummary);
+                
+                grid.appendChild(row);
+            }
+            updateLogic();
+        }
+
+        function updateLogic() {
+            let ucTotal = 0;
+            let matTotal = 0;
+            let highestSemApproved = 0;
+            let semsData = Array(10).fill(0); // Para guardar las UCs por semestre (índice 0 a 9)
+            
+            // Calculo global y por semestre
+            parsedSubjects.forEach(sub => {
+                if (approved.has(sub.id)) {
+                    ucTotal += sub.uc;
+                    matTotal++;
+                    semsData[sub.s - 1] += sub.uc;
+                    if (sub.s > highestSemApproved) {
+                        highestSemApproved = sub.s;
+                    }
+                }
+            });
+            
+            // Actualizar Dashboards (Superior e Inferior)
+            document.querySelectorAll('.uc-count-display').forEach(el => el.innerText = ucTotal);
+            document.querySelectorAll('.mat-count-display').forEach(el => el.innerText = matTotal);
+
+            // Actualizar columna lateral derecha (UCs)
+            let accumUC = 0;
+            for (let i = 1; i <= 10; i++) {
+                const summaryBox = document.getElementById(`uc-summary-${i}`);
+                if (!summaryBox) continue;
+                
+                const semUC = semsData[i - 1];
+                accumUC += semUC;
+                
+                summaryBox.querySelector('.uc-summary-vals').innerText = `${semUC} | ${accumUC}`;
+                
+                // Lógica de "Salto" (Warning)
+                if (i < highestSemApproved && semUC === 0) {
+                    summaryBox.classList.add('jump-warning');
+                    summaryBox.title = "¡Atención! Semestre sin materias seleccionadas en medio de un salto.";
+                } else {
+                    summaryBox.classList.remove('jump-warning');
+                    summaryBox.title = "UCs del Semestre | UCs Acumuladas";
+                }
+            }
+
+            let lowestPending = 10;
+            parsedSubjects.forEach(sub => {
+                if (!approved.has(sub.id) && sub.s < lowestPending) {
+                    lowestPending = sub.s;
+                }
+            });
+
+            const alerts = document.getElementById('alerts');
+            alerts.innerHTML = `<h3>Reglas y Restricciones: ${currentSch.toUpperCase()}</h3><p class="info">${db[currentSch].rule}</p>`;
+            
+            if(lowestPending < 10) {
+                alerts.innerHTML += `<p class="error">¡Atención! Tienes materias pendientes del Semestre ${lowestPending}. Nivel máximo permitido para inscribir: Semestre ${lowestPending + 2}.</p>`;
+            } else if (lowestPending === 10 && matTotal === parsedSubjects.length) {
+                alerts.innerHTML += `<p style="color: #4caf50; font-weight: bold;">¡Felicidades! Has completado todo el mapa curricular.</p>`;
+            }
+
+            parsedSubjects.forEach(sub => {
+                const el = document.getElementById(sub.id);
+                if(!el) return;
+                
+                el.classList.remove('approved', 'available', 'locked');
+                
+                const badge = el.querySelector('.req-badge');
+                if(badge) badge.style.display = 'block';
+
+                if (approved.has(sub.id)) {
+                    el.classList.add('approved');
+                    if(badge) badge.style.display = 'none';
+                } else {
+                    const reqMet = sub.reqs.every(reqId => approved.has(reqId));
+                    const ucMet = ucTotal >= sub.minUC;
+                    
+                    const isFlexible = sub.name.includes('Electiva') || sub.name.includes('Trabajo de Grado') || sub.name.includes('Seminario') || sub.name.includes('Problemática');
+                    const levelMet = isFlexible ? true : (sub.s <= (lowestPending + 2));
+
+                    if (reqMet && ucMet && levelMet) {
+                        el.classList.add('available');
+                    } else {
+                        el.classList.add('locked');
+                    }
+                }
+            });
+        }
+
+        window.onload = loadSchool;
+    </script>
+</body>
+</html>
